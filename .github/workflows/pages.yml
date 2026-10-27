@@ -1,0 +1,35 @@
+name: 发布个人主页
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 读取仓库
+        uses: actions/checkout@v4
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+      - name: 打包站点
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: 发布站点
+        id: deployment
+        uses: actions/deploy-pages@v4
