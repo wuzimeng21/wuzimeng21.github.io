@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#ffffff"><title>leetGPU · 技术笔记</title><meta name="description" content="向量加法、矩阵乘法等 CUDA 练习代码与实现记录。"><meta property="og:title" content="leetGPU"><meta property="og:type" content="article"><meta property="og:description" content="向量加法、矩阵乘法等 CUDA 练习代码与实现记录。"><link rel="canonical" href="https://wuzimeng21.github.io/posts/leetgpu-notes.html"><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="../assets/styles.css"><link rel="stylesheet" href="../assets/article.css"><script src="../assets/data.js" defer></script><script src="../assets/app.js" defer></script><script src="../assets/article.js" defer></script></head>
+<body id="top" data-page="article" data-site-root="../"><a class="skip-link" href="#article-body">跳到正文</a><div class="reading-progress" aria-hidden="true"></div><header class="site-header"><div class="container header-inner">
+<a class="brand" href="../index.html" aria-label="技术笔记首页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg><span>技术笔记</span></a>
+<nav class="desktop-nav" aria-label="主导航"><a class="nav-link active" href="../index.html#notes" aria-current="page">文章</a><a class="nav-link" href="../index.html#topics">分类</a></nav>
+<div class="header-actions"><button class="icon-button search-trigger js-only" type="button" aria-label="搜索本站"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span class="search-label">搜索文章</span><kbd>/</kbd></button><span class="header-divider" aria-hidden="true"></span><button class="icon-button theme-toggle js-only" type="button" aria-label="切换为深色模式" aria-pressed="false"><svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20.6 13.2A8.7 8.7 0 0 1 10.8 3.4a8.7 8.7 0 1 0 9.8 9.8Z"/></svg><svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button></div>
+</div></header>
+<main class="container article-page"><nav class="breadcrumbs" aria-label="当前位置"><a href="../index.html#notes">文章目录</a><span aria-hidden="true">/</span><span>GPU与性能</span></nav><article><header class="article-header"><p class="article-category">GPU与性能</p><h1>leetGPU</h1><div class="article-byline"><time datetime="2026-05-16">2026-05-16</time><span>来源：CSDN</span></div><div class="article-tools"><a href="https://blog.csdn.net/2201_76119663/article/details/161147247" target="_blank" rel="noopener noreferrer">阅读 CSDN 原文 ↗</a><a href="./source/leetgpu-notes.md" download>下载 Markdown ↓</a><a href="../index.html#notes">返回文章目录 →</a></div></header><div class="reading-layout"><div><div class="article-content" id="article-body"><ol>
+<li><strong>加粗样式</strong>:</li>
+</ol>
+<pre id="part-1"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void vector_add(const float* A, const float* B, float* C, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx &lt; N) {
+        C[idx] = A[idx] + B[idx];
+    }
+}
+
+// A, B, C are device pointers (i.e. pointers to memory on the GPU)
+extern "C" void solve(const float* A, const float* B, float* C, int N) {
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    vector_add&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(A, B, C, N);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="2">
+<li>2:</li>
+</ol>
+<pre id="part-2"><code>#include &lt;cuda_runtime.h&gt;
+
+/// 矩阵乘法 kernel（naive 实现）
+/// A: M × N,  B: N × K,  C: M × K,  全部行主序存储
+/// 每个线程计算 C 的一个元素
+__global__ void matrix_multiplication_kernel(const float* A, const float* B, float* C, int M, int N,
+                                             int K) {
+    // 当前线程负责 C[row][col]
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // 边界检查
+    if (row &lt; M &amp;&amp; col &lt; K) {
+        float sum = 0.0f;
+
+        // 沿共享维度 N 做内积: A 的第 row 行 × B 的第 col 列
+        for (int n = 0; n &lt; N; n++) {
+            sum += A[row * N + n] * B[n * K + col];
+        }
+
+        C[row * K + col] = sum;
+    }
+}
+
+/// solve 函数
+/// A, B, C 已经是 GPU 上的指针，无需 cudaMalloc/cudaMemcpy
+extern "C" void solve(const float* A, const float* B, float* C, int M, int N, int K) {
+    // 2D block: 16×16 = 256 线程（32 的倍数，occupancy 友好）
+    dim3 threadsPerBlock(16, 16);
+
+    // 2D grid: 按 K（宽）和 M（高）覆盖整个输出矩阵
+    dim3 blocksPerGrid((K + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (M + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    // Launch kernel
+    matrix_multiplication_kernel&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(A, B, C, M, N, K);
+
+    // 等待 GPU 执行完毕
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="3">
+<li>3:</li>
+</ol>
+<pre id="part-3"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void matrix_transpose_kernel(const float* input, float* output, int rows, int cols) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if(row &lt; rows &amp;&amp; col &lt; cols) {
+        output[col * rows + row] = input[row *cols + col];
+    }
+}
+
+// input, output are device pointers (i.e. pointers to memory on the GPU)
+extern "C" void solve(const float* input, float* output, int rows, int cols) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 blocksPerGrid((cols + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (rows + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    matrix_transpose_kernel&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(input, output, rows, cols);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="4">
+<li>4:</li>
+</ol>
+<pre id="part-4"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void invert_kernel(unsigned char* image, int width, int height) {
+    int idx = blockIdx.x * blockDim.x +threadIdx.x;
+    if(idx &lt; width * height) {
+        uchar4 * pixel = (uchar4 *)(image + idx * 4);
+        uchar4 p = *pixel;
+        p.x = 255 - p.x;
+        p.y = 255 - p.y;
+        p.z = 255 - p.z;
+        *pixel = p;
+        
+    }
+}
+// image_input, image_output are device pointers (i.e. pointers to memory on the GPU)
+extern "C" void solve(unsigned char* image, int width, int height) {
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (width * height + threadsPerBlock - 1) / threadsPerBlock;
+
+    invert_kernel&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(image, width, height);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="5">
+<li>5:</li>
+</ol>
+<pre id="part-5"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void matrix_add(const float* A, const float* B, float* C, int N) {
+    // int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx &lt; N * N) {
+        C[idx] = (A[idx] + B[idx]);
+    }
+}
+
+// A, B, C are device pointers (i.e. pointers to memory on the GPU)
+extern "C" void solve(const float* A, const float* B, float* C, int N) {
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N * N + threadsPerBlock - 1) / threadsPerBlock;
+
+    matrix_add&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(A, B, C, N);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="6">
+<li>6:</li>
+</ol>
+<pre id="part-6"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void convolution_1d_kernel(const float* input, const float* kernel, float* output,
+                                      int input_size, int kernel_size) {
+                                        int idx1 = blockIdx.x * blockDim.x + threadIdx.x;
+                                        if(idx1 &lt;  input_size - kernel_size + 1 ) {
+                                            float t = 0.0f;
+                                            for(int idx2 = 0; idx2 &lt;= kernel_size - 1; idx2 ++){
+                                                t += input[idx1 + idx2] * kernel[idx2];
+                                            }
+                                            output[idx1] = t;
+
+                                        } 
+                                      }
+
+// input, kernel, output are device pointers (i.e. pointers to memory on the GPU)
+extern "C" void solve(const float* input, const float* kernel, float* output, int input_size,
+                      int kernel_size) {
+    int output_size = input_size - kernel_size + 1;
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (output_size + threadsPerBlock - 1) / threadsPerBlock;
+
+    convolution_1d_kernel&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(input, kernel, output, input_size,
+                                                              kernel_size);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="7">
+<li>7:</li>
+</ol>
+<pre id="part-7"><code>#include &lt;cuda_runtime.h&gt;
+
+__global__ void reverse_array(float* input, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx &lt; N / 2) {
+        int t = input[idx];
+        input[idx] = input[N - idx - 1];
+        input[N - idx - 1] = t;
+    }
+}
+
+// input is device pointer
+extern "C" void solve(float* input, int N) {
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    reverse_array&lt;&lt;&lt;blocksPerGrid, threadsPerBlock&gt;&gt;&gt;(input, N);
+    cudaDeviceSynchronize();
+}
+</code></pre>
+<ol start="8">
+<li>8</li>
+</ol>
+</div><div class="article-endnote">原文：<a href="https://blog.csdn.net/2201_76119663/article/details/161147247" target="_blank" rel="noopener noreferrer">leetGPU</a></div><nav class="post-neighbors" aria-label="其他文章"><span></span><a href="./leetcode-154-rotated-minimum.html"><small>下一篇</small>【Daily Code】leetcode 154. 寻找旋转排序数组中的最小值 II</a></nav></div><aside class="reading-aside" aria-label="文章导航"><div class="toc-box"><h2>目录</h2><nav class="article-toc" aria-label="目录"><a href="#part-1" class="">代码片段 1</a><a href="#part-2" class="">代码片段 2</a><a href="#part-3" class="">代码片段 3</a><a href="#part-4" class="">代码片段 4</a><a href="#part-5" class="">代码片段 5</a><a href="#part-6" class="">代码片段 6</a><a href="#part-7" class="">代码片段 7</a></nav></div><div class="source-box"><a href="../index.html#notes">← 全部文章</a><a href="https://blog.csdn.net/2201_76119663/article/details/161147247" target="_blank" rel="noopener noreferrer">CSDN 原文 ↗</a></div></aside></div></article></main>
+<footer class="site-footer"><div class="container footer-inner"><span>技术笔记</span><span id="year">2026</span><div class="footer-links"><a href="https://www.zhihu.com/people/36-56-86-40" target="_blank" rel="noopener noreferrer">知乎 ↗</a><a href="https://blog.csdn.net/2201_76119663?type=blog" target="_blank" rel="noopener noreferrer">CSDN ↗</a><a href="#top">返回顶部 ↑</a></div></div></footer><dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="search-dialog-header"><h2 id="search-title">搜索文章</h2><button class="icon-button search-close" type="button" aria-label="关闭搜索">×</button></div><label class="search-input-label" for="site-search">标题、分类或关键词</label><input id="site-search" type="search" autocomplete="off" placeholder="输入关键词"><div id="search-results" class="search-results" aria-live="polite"></div><p class="search-hint">按 Esc 关闭</p></dialog><div id="copy-notice" class="copy-notice" role="status" aria-live="polite"></div></body></html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#ffffff"><title>【Daily Code】leetcode 2110.股票平滑下跌阶段的数目 · 技术笔记</title><meta name="description" content="股票平滑下跌阶段的计数与 C++ 实现。"><meta property="og:title" content="【Daily Code】leetcode 2110.股票平滑下跌阶段的数目"><meta property="og:type" content="article"><meta property="og:description" content="股票平滑下跌阶段的计数与 C++ 实现。"><link rel="canonical" href="https://wuzimeng21.github.io/posts/leetcode-2110-smooth-descent.html"><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="../assets/styles.css"><link rel="stylesheet" href="../assets/article.css"><script src="../assets/data.js" defer></script><script src="../assets/app.js" defer></script><script src="../assets/article.js" defer></script></head>
+<body id="top" data-page="article" data-site-root="../"><a class="skip-link" href="#article-body">跳到正文</a><div class="reading-progress" aria-hidden="true"></div><header class="site-header"><div class="container header-inner">
+<a class="brand" href="../index.html" aria-label="技术笔记首页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg><span>技术笔记</span></a>
+<nav class="desktop-nav" aria-label="主导航"><a class="nav-link active" href="../index.html#notes" aria-current="page">文章</a><a class="nav-link" href="../index.html#topics">分类</a></nav>
+<div class="header-actions"><button class="icon-button search-trigger js-only" type="button" aria-label="搜索本站"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span class="search-label">搜索文章</span><kbd>/</kbd></button><span class="header-divider" aria-hidden="true"></span><button class="icon-button theme-toggle js-only" type="button" aria-label="切换为深色模式" aria-pressed="false"><svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20.6 13.2A8.7 8.7 0 0 1 10.8 3.4a8.7 8.7 0 1 0 9.8 9.8Z"/></svg><svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button></div>
+</div></header>
+<main class="container article-page"><nav class="breadcrumbs" aria-label="当前位置"><a href="../index.html#notes">文章目录</a><span aria-hidden="true">/</span><span>算法与C++</span></nav><article><header class="article-header"><p class="article-category">算法与C++</p><h1>【Daily Code】leetcode 2110.股票平滑下跌阶段的数目</h1><div class="article-byline"><time datetime="2026-05-13">2026-05-13</time><span>来源：CSDN</span></div><div class="article-tools"><a href="https://blog.csdn.net/2201_76119663/article/details/161027739" target="_blank" rel="noopener noreferrer">阅读 CSDN 原文 ↗</a><a href="./source/leetcode-2110-smooth-descent.md" download>下载 Markdown ↓</a><a href="../index.html#notes">返回文章目录 →</a></div></header><div class="reading-layout"><div><div class="article-content" id="article-body"><pre id="part-1"><code class="language-cpp">class Solution {
+public:
+    long long getDescentPeriods(vector&lt;int&gt;&amp; prices) {
+        vector&lt;int&gt; nums;
+        int n = prices.size();
+        for(int i = 1 ; i &lt; n; i ++) {
+            int t = 1;
+            bool flag = false;
+            while(t &lt; n &amp;&amp; i &lt; n &amp;&amp; prices[i] + 1 == prices[i - 1]) {
+                // std::cout &lt;&lt; "i: " &lt;&lt; i &lt;&lt; std::endl;
+                t ++, i ++;
+                flag = true;
+            }
+            // i += t;
+            // i ++;
+            if(flag) {
+                nums.push_back(t);
+                // std::cout &lt;&lt; t &lt;&lt; std::endl;
+            }
+        }
+        long long res = n;
+        if(nums.size() == 0) return res;
+        for( auto x: nums) {
+            res  += 1LL *(0.5 * x * (x - 1));
+        }
+        return res;
+    }
+};
+</code></pre>
+</div><div class="article-endnote">原文：<a href="https://blog.csdn.net/2201_76119663/article/details/161027739" target="_blank" rel="noopener noreferrer">【Daily Code】leetcode 2110.股票平滑下跌阶段的数目</a></div><nav class="post-neighbors" aria-label="其他文章"><a href="./leetcode-154-rotated-minimum.html"><small>上一篇</small>【Daily Code】leetcode 154. 寻找旋转排序数组中的最小值 II</a><a href="./cpp-divisors.html"><small>下一篇</small>约数试除法C++</a></nav></div><aside class="reading-aside" aria-label="文章导航"><div class="toc-box"><h2>目录</h2><nav class="article-toc" aria-label="目录"><a href="#part-1" class="">代码片段 1</a></nav></div><div class="source-box"><a href="../index.html#notes">← 全部文章</a><a href="https://blog.csdn.net/2201_76119663/article/details/161027739" target="_blank" rel="noopener noreferrer">CSDN 原文 ↗</a></div></aside></div></article></main>
+<footer class="site-footer"><div class="container footer-inner"><span>技术笔记</span><span id="year">2026</span><div class="footer-links"><a href="https://www.zhihu.com/people/36-56-86-40" target="_blank" rel="noopener noreferrer">知乎 ↗</a><a href="https://blog.csdn.net/2201_76119663?type=blog" target="_blank" rel="noopener noreferrer">CSDN ↗</a><a href="#top">返回顶部 ↑</a></div></div></footer><dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="search-dialog-header"><h2 id="search-title">搜索文章</h2><button class="icon-button search-close" type="button" aria-label="关闭搜索">×</button></div><label class="search-input-label" for="site-search">标题、分类或关键词</label><input id="site-search" type="search" autocomplete="off" placeholder="输入关键词"><div id="search-results" class="search-results" aria-live="polite"></div><p class="search-hint">按 Esc 关闭</p></dialog><div id="copy-notice" class="copy-notice" role="status" aria-live="polite"></div></body></html>
